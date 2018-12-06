@@ -1,17 +1,12 @@
 import os, sys, socket, struct, select, time, signal
 
 
-'''
-    转载于 https://pypi.org/project/python3-ping
-    做了一些删减改造
+"""转载于 https://pypi.org/project/python3-ping
+   做了一些删减改造
 
-    Reprinted in https://pypi.org/project/python3-ping
-    I just made some modifications
-
-    Example:
-        verbose_ping('www.zhihu.com')
-
-'''
+   Example:
+    verbose_ping('www.zhihu.com')
+"""
 
 if sys.platform == "win32":
     default_timer = time.clock

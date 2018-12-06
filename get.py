@@ -1,6 +1,6 @@
 import requests
 from requests.utils import get_encoding_from_headers,get_encodings_from_content
-from .utils import retry,user_agent
+from utils import retry,user_agent
 import socket
 import time
 from urllib.parse import splittype
@@ -16,9 +16,8 @@ from urllib.request import (Request,urlopen,ProxyHandler,
 __all__ = ['geturl','loadurl','set_now']
 
 
-def geturl(url,m='get',headers=dict(),ip=None,retries=0,enccoding=None,data=None,*args,**kwargs):
-    '''
-        基于requests第三方库，对其进一步封装，返回response对象
+def geturl(url, m='get', headers={}, ip=None, retries=0, encoding=None, data=None, *args, **kwargs):
+    """基于requests第三方库，对其进一步封装，返回response对象
             1.自动设定User-Agent
             2.自动判断html编码方式（url链接为文件的话无法自动判断）
 
@@ -33,86 +32,75 @@ def geturl(url,m='get',headers=dict(),ip=None,retries=0,enccoding=None,data=None
             其他：可以传入基于requests的其他参数
         返回值：
             requests的response对象
-
-    '''
+    """
     us = {'User-Agent':user_agent()}
     if headers.get('User-Agent') == None:
         headers.update(us)
 
     # 代理ip的处理  
+    proxies = None
     if ip:
         proxies = {'http':ip,'https':ip,'socks5':ip}
-    else:
-        proxies = None
-
+    
     # 请求网页的主函数
     #    retry 请求响应错误时重试 
     @retry(retries=retries)
-    def response():
-        requestsMETHOD = getattr(requests, m)   # 字符串变成函数变量名
-        response = requestsMETHOD(url,headers=headers,proxies=proxies,*args,**kwargs)
-        return response
-    r = response()
+    def _response():
+        request_method = getattr(requests, m)   # 字符串变成函数变量名
+        rm = request_method(url,headers=headers,proxies=proxies,*args,**kwargs)
+        return rm
+    r = _response()
 
     # 重试失败的话返回错误信息
     if False in r:
         return r[1]
 
     # 优先采用encoding参数，如果不存在则自动判断 
-    if enccoding != None:
+    if encoding != None:
         r.encoding = encoding
     else:
-
         # 一般的下载文件都很大，判断编码方式过于占用时间
         # 故先判断url链接是否为文件，不是文件才分析编码      
         if "text/html" in r.headers['Content-Type']:
             encoding = get_encodings_from_content(r.text)
             if encoding:
                 r.encoding = encoding[0]
+
     return r
 
 
 def format_size(bytes):
-    '''
-        字节bytes转化K/M/G
+    """字节bytes转化K/M/G
 
         参数：
             bytes：字节流
         返回值：
             转换后的字符串数据（关系为1024）
-
-    '''
+    """
     bytes = float(bytes)
-    kb = bytes / 1024
-    if kb >= 1024:
-        M = kb / 1024
+    KB = bytes / 1024
+    if KB >= 1024:
+        M = KB / 1024
         if M >= 1024:
             G = M / 1024
-            return "%.3fGB" % (G)
+            return "{:.3f}GB".format(G)
         else:
-            return "%.3fMB" % (M)
-    else:
-        return "%.3fKB" % (kb)
-
+            return "{:.3f}MB".format(M)
+    return "{:.3f}KB".format(KB)
 
 
 def set_now():
-    '''
-        获取当前时间
+    """获取当前时间
 
         返回值：
             特殊格式的字符串时间戳
-
-    '''
-    date = time.strftime("%H:%M:%S", time.localtime())
-    info = " " + date + " "
-    return info
-
+    """
+    DATE = time.strftime("%H:%M:%S", time.localtime())
+    return DATE
 
 
 def callbackfunc(downsize, totalsize, start_time):
-    '''
-        下载文件时的回调函数
+    """下载文件时的回调函数
 
         参数：
             downsize: 已经下载的数据
@@ -120,58 +108,53 @@ def callbackfunc(downsize, totalsize, start_time):
             start_time： 用于统计网速的起始时间
         返回值：
             在控制台上打印出下载的进度条
-
-    '''
-
+    """
     # 产生网速数据，并将bytes数据转化成 K/M/G
-    interval = time.time() - start_time  # 间隔时间过短时不允许为0
-    if interval <= 0:
-        interval = 0.0001
-    speed = downsize / interval
-    if speed != 0:
-        remind_time = (totalsize - downsize) / speed
-        remind_time_str = "%.fs" % remind_time
-    else:
-        remind_time_str = '--'
-    speed_str = "%s/s" % format_size(speed)
-    d = format_size(downsize)
-    t = format_size(totalsize)
-    # d_t = d + '/' + t
+    INTERVAL = time.time() - start_time  # 间隔时间过短时不允许为0
+    if INTERVAL <= 0:
+        INTERVAL = 0.00001
+
+    # 产生剩余时间
+    SPEED = downsize / INTERVAL
+    REMIND_TIME_STR = "--"
+    if SPEED != 0:
+        remind_time = (totalsize - downsize) / SPEED
+        REMIND_TIME_STR = "{:.2f}s".format(remind_time)
 
     # 产生进度条 
     percent = 100.0 * downsize / totalsize  # 计算百分比
+    D = format_size(downsize)
+    T = format_size(totalsize)
     if percent > 100: percent = 100
     elif percent == 0:
-        print(set_now() + "Start download " + str(path) + ' (' + t + ')')
-        # print(set_now() + "Start download " + str(path))
-    percent_str =  "%.2f%%"%(percent)  
+        print(set_now() + " Start download " + str(path) + ' (' + T + ')')
 
     # 计算进度条步伐，显示方式等 
-    steps = 25 
-    num_arrow = int(downsize/(totalsize/steps))    
-    num_line = steps - num_arrow   
-    done = '+' * num_arrow
-    undone = '-' * num_line
+    STEPS = 25 
+    num_arrow = int(downsize/(totalsize/STEPS))    
+    num_line = STEPS - num_arrow   
+    DONE = "+" * num_arrow
+    UNDONE = "-" * num_line
 
     # 拼接各个数据 
-    p = " " + percent_str + ' [' + done + undone + "] " + d + ' ' + speed_str + " " + remind_time_str    # 显示进度条和百分比
-    # p = " " + percent_str + ' [' + done + undone + "] " + speed_str + " | " + remind_time_str + " | " + d_t 
-    sus = set_now() + 'Download success!'
-    r = '\r'
-    n = '\n'
-    p_blank = " " * 5       # 命令行一行输出会重叠，末尾用空格替代
-    s_blank = " " * ( len(p) - len(sus) + 5 )
+    SPEED_STR = "{}/s".format(format_size(SPEED))
+    PERCENT_STR =  "{:.2f}%".format(percent)  
+    P_STR = PERCENT_STR + ' [' + DONE + UNDONE + "] " + D + " " + SPEED_STR + " " + REMIND_TIME_STR    # 显示进度条和百分比
+    SUS = set_now() + " Download success {}".format(str(path))
+    R = '\r'
+    N = '\n'
+    P_BLANK = " " * 5       # 命令行一行输出会重叠，末尾用空格替代
+    S_BLANK = " " * ( len(P_STR) - len(SUS) + 5 )
 
     # 显示进度条 
     if hook == True:
-        print(p + p_blank + r,end="")
+        print(P_STR + P_BLANK + R,end="")
     if percent == 100:
-        print(sus + s_blank + n,end="")   
+        print(SUS + S_BLANK + N,end="")   
 
 
 def download_func(url, filename=None, ip=None, headers=None, reporthook=None, data=None):
-    '''
-        参考于urllib.request.urlretrieve函数，进行了一定的改进
+    """参考于urllib.request.urlretrieve函数，进行了一定的改进
             1.可以添加ip代理与headers
             2.可以显示制定的进度条
 
@@ -184,8 +167,7 @@ def download_func(url, filename=None, ip=None, headers=None, reporthook=None, da
             data：向服务器发送数据
         返回值：
             下载文件相关信息
-
-    '''
+    """
     url_type, path = splittype(url)
     req_obj = Request(url);
 
@@ -222,7 +204,7 @@ def download_func(url, filename=None, ip=None, headers=None, reporthook=None, da
             url_tempfile.append(filename)
         with tfp:
             result = filename, headers
-            bs = 1024*500    # 每块的大小
+            bs = 1024 * 20     # 每块的大小
             size = -1       # 总大小
             downsize = 0        # 已下载的大小
 
@@ -255,9 +237,8 @@ def download_func(url, filename=None, ip=None, headers=None, reporthook=None, da
 
 
 
-def loadurl(url, filename=None, ip=None,retries=0, headers=dict(), timeout=30, showhook=True):
-    '''
-        下载远程文件，流程为： 主函数 --> 下载函数 --> 进度条函数
+def loadurl(url, filename=None, ip=None,retries=0, headers={}, timeout=30, showhook=True):
+    """下载远程文件，流程为： 主函数 --> 下载函数 --> 进度条函数
             1.下载失败的话自动删除下载文件（程序中断的情况无法删除）
 
         参数：
@@ -271,8 +252,7 @@ def loadurl(url, filename=None, ip=None,retries=0, headers=dict(), timeout=30, s
         返回值
             下载成功返回 True
             下载失败返回 False
-
-    '''
+    """
     global hook,path,url_tempfile
     hook = showhook
     if not isinstance(hook,bool):  raise TypeError(hook)
@@ -288,17 +268,18 @@ def loadurl(url, filename=None, ip=None,retries=0, headers=dict(), timeout=30, s
 
     # 重试函数不允许重复嵌套，只能从这里下手 
     @retry(retries=retries)
-    def temp(*args,**kwargs):
+    def _temp(*args,**kwargs):
         download_func(*args,**kwargs)
-    result = temp(url, filename=filename, ip=ip, headers=headers, reporthook=callbackfunc)
+    r = _temp(url, filename=filename, ip=ip, headers=headers, reporthook=callbackfunc)
 
     # 重试也失败的话返回错误信息
-    if False in result:
-        return result[1]
+    if not r == None:
+        if False in r:
+            return r[1]
 
     # 下载错误的话删除下载不完整的文件 
     #        注意：程序突然终止的话文件无法删除
-    if result == False:
+    if r == False:
         if os.path.exists(filename):
             os.remove(filename)
         return False
